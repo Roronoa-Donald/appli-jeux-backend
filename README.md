@@ -65,9 +65,10 @@ node run-migrations.js
 ## Migrations
 
 Les migrations se trouvent dans `migrations/` :
-- `001_init.sql` - Schema initial (obsolète, remplacé par database.sql)
+- `001_init.sql` - Schema initial avec 100 questions
 - `002_sync_questions.sql` - 100 questions intimes synchronisées avec frontend
 - `003_unique_answers.sql` - Contrainte unique pour éviter doublons
+- `004_add_auth.sql` - Colonnes email et password_hash pour authentification
 
 Pour appliquer toutes les migrations :
 ```bash
@@ -77,26 +78,32 @@ node run-migrations.js  # Production (Render shell)
 
 ## API Endpoints
 
-| Route | Méthode | Description |
-|-------|---------|-------------|
-| `/health` | GET | Health check |
-| `/sessions` | POST | Créer/update session |
-| `/sessions/:id` | GET | Récupérer session |
-| `/progress?session_id=` | GET | Progression session |
-| `/answers` | POST | Soumettre réponse |
-| `/recap?session_id=` | GET | Toutes les réponses |
-| `/admin/users` | GET | Liste utilisateurs |
-| `/admin/users/:id/questions` | GET | Questions d'un user |
-| `/admin/pairings` | POST | Créer un duo |
+| Route | Méthode | Auth | Description |
+|-------|---------|------|-------------|
+| `/health` | GET | - | Health check |
+| `/auth/register` | POST | - | Créer un compte |
+| `/auth/login` | POST | - | Se connecter |
+| `/sessions` | POST | Optional | Créer/update session |
+| `/sessions/:id` | GET | Optional | Récupérer session |
+| `/progress?session_id=` | GET | Optional | Progression session |
+| `/answers` | POST | Optional | Soumettre réponse |
+| `/answers/batch` | POST | Optional | Soumettre jusqu'à 100 réponses |
+| `/recap?session_id=` | GET | Optional | Toutes les réponses |
+| `/admin/users` | GET | Required | Liste utilisateurs (paginée) |
+| `/admin/users/:id/questions` | GET | Required | Questions d'un user |
+| `/admin/pairings` | POST | Required | Créer un duo |
 
 ## Sécurité
 
-- ✅ Rate limiting activé
-- ✅ CORS configuré
+- ✅ Rate limiting activé (300 req/15min global, 10 req/15min auth)
+- ✅ CORS configuré avec whitelist stricte
 - ✅ Validation stricte des inputs
 - ✅ Transactions SQL
 - ✅ SSL/TLS en production
-- ⚠️ **TODO** : Ajouter authentification JWT
+- ✅ Authentification JWT avec bcrypt
+- ✅ HTTPS enforcement
+- ✅ Security headers (HSTS, CSP, X-Frame-Options)
+- ✅ Authorization checks (users can only access their own data)
 
 ## Troubleshooting
 
