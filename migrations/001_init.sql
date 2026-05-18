@@ -1,0 +1,151 @@
+-- RD Reponses backend schema and seed
+
+CREATE TABLE IF NOT EXISTS users (
+  user_id TEXT PRIMARY KEY,
+  display_name TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+  session_id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+  started_at TIMESTAMPTZ NOT NULL,
+  ended_at TIMESTAMPTZ,
+  total_active_ms INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS questions (
+  question_id TEXT PRIMARY KEY,
+  section_id TEXT NOT NULL,
+  question_text TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS answers (
+  reponse_id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+  session_id TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
+  question_id TEXT NOT NULL REFERENCES questions(question_id),
+  section_id TEXT NOT NULL,
+  question_text TEXT NOT NULL,
+  reponse TEXT,
+  selected_option TEXT,
+  free_text TEXT,
+  skipped BOOLEAN NOT NULL DEFAULT FALSE,
+  timestamp TIMESTAMPTZ NOT NULL,
+  CONSTRAINT answers_free_text_len CHECK (char_length(free_text) <= 200)
+);
+
+CREATE TABLE IF NOT EXISTS pairings (
+  pairing_id TEXT PRIMARY KEY,
+  user_id_a TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+  user_id_b TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+  session_id TEXT REFERENCES sessions(session_id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_answers_session ON answers(session_id);
+CREATE INDEX IF NOT EXISTS idx_answers_user ON answers(user_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+
+INSERT INTO questions (question_id, section_id, question_text) VALUES
+  ('profil-1', 'profil', 'Comment decrivez vous votre rythme naturel'),
+  ('profil-2', 'profil', 'Quand vous prenez une decision, vous etes plutot'),
+  ('profil-3', 'profil', 'Quel environnement vous aide a vous concentrer'),
+  ('profil-4', 'profil', 'Quel niveau d organisation vous correspond'),
+  ('profil-5', 'profil', 'Vous preferez commencer par'),
+  ('profil-6', 'profil', 'Ce qui vous donne confiance au debut'),
+  ('profil-7', 'profil', 'Vous etes a l aise dans un cadre'),
+  ('profil-8', 'profil', 'Votre niveau de patience est plutot'),
+  ('profil-9', 'profil', 'Quand vous apprenez, vous aimez'),
+  ('profil-10', 'profil', 'Ce qui vous decrit le mieux'),
+  ('valeurs-1', 'valeurs', 'Quelle valeur guide vos choix'),
+  ('valeurs-2', 'valeurs', 'Dans un duo, le plus important est'),
+  ('valeurs-3', 'valeurs', 'Face a un conflit, vous preferez'),
+  ('valeurs-4', 'valeurs', 'Quel principe ne doit jamais bouger'),
+  ('valeurs-5', 'valeurs', 'Vous valorisez surtout'),
+  ('valeurs-6', 'valeurs', 'Dans une decision vous privilegiez'),
+  ('valeurs-7', 'valeurs', 'Qu est ce qui vous rend fier'),
+  ('valeurs-8', 'valeurs', 'Quel niveau de risque vous convient'),
+  ('valeurs-9', 'valeurs', 'Quand vous donnez votre parole vous etes'),
+  ('valeurs-10', 'valeurs', 'Une cause qui vous touche'),
+  ('habitudes-1', 'habitudes', 'A quelle heure vous etes le plus efficace'),
+  ('habitudes-2', 'habitudes', 'Comment demarre votre journee'),
+  ('habitudes-3', 'habitudes', 'A quelle frequence vous planifiez la semaine'),
+  ('habitudes-4', 'habitudes', 'Quel rituel vous aide a dormir'),
+  ('habitudes-5', 'habitudes', 'Combien de pauses vous prenez'),
+  ('habitudes-6', 'habitudes', 'Comment vous gerez les notifications'),
+  ('habitudes-7', 'habitudes', 'Quel moment est le plus calme'),
+  ('habitudes-8', 'habitudes', 'Quel repas vous stabilise le plus'),
+  ('habitudes-9', 'habitudes', 'Quel geste simple vous recentre'),
+  ('habitudes-10', 'habitudes', 'Quelle habitude vous aimeriez changer'),
+  ('energie-1', 'energie', 'Comment vous rechargez vos batteries'),
+  ('energie-2', 'energie', 'Votre niveau de stress est plutot'),
+  ('energie-3', 'energie', 'Quand la pression monte, vous'),
+  ('energie-4', 'energie', 'Quel facteur vous fatigue le plus'),
+  ('energie-5', 'energie', 'Votre besoin de calme est'),
+  ('energie-6', 'energie', 'Vous preferez travailler'),
+  ('energie-7', 'energie', 'Comment vous gerez les nuits courtes'),
+  ('energie-8', 'energie', 'Quel type de musique vous aide'),
+  ('energie-9', 'energie', 'Votre niveau d energie est'),
+  ('energie-10', 'energie', 'Quand vous avez un coup de mou'),
+  ('loisirs-1', 'loisirs', 'Quel loisir vous attire le plus'),
+  ('loisirs-2', 'loisirs', 'Quel type de musique vous energise'),
+  ('loisirs-3', 'loisirs', 'Quel film ou serie vous ressemble'),
+  ('loisirs-4', 'loisirs', 'Quel style de lecture vous attire'),
+  ('loisirs-5', 'loisirs', 'Quel jeu vous plait le plus'),
+  ('loisirs-6', 'loisirs', 'Quel type de voyage vous attire'),
+  ('loisirs-7', 'loisirs', 'Quel talent vous aimeriez developper'),
+  ('loisirs-8', 'loisirs', 'Votre activite de detente preferee'),
+  ('loisirs-9', 'loisirs', 'Vous preferez un weekend'),
+  ('loisirs-10', 'loisirs', 'Quel sport vous attire le plus'),
+  ('relationnel-1', 'relationnel', 'Votre cercle d amis est'),
+  ('relationnel-2', 'relationnel', 'Quelle place a la famille dans votre vie'),
+  ('relationnel-3', 'relationnel', 'Vous preferez passer du temps'),
+  ('relationnel-4', 'relationnel', 'Quand vous rencontrez quelqu un'),
+  ('relationnel-5', 'relationnel', 'Vous donnez confiance'),
+  ('relationnel-6', 'relationnel', 'Le soutien d un ami est'),
+  ('relationnel-7', 'relationnel', 'Dans un groupe, vous etes'),
+  ('relationnel-8', 'relationnel', 'Vous exprimez votre accord'),
+  ('relationnel-9', 'relationnel', 'Vous preferez un duo'),
+  ('relationnel-10', 'relationnel', 'Un bon ami doit etre'),
+  ('communication-1', 'communication', 'Votre style de communication est'),
+  ('communication-2', 'communication', 'Vous preferez recevoir un retour'),
+  ('communication-3', 'communication', 'Quand vous etes en desaccord'),
+  ('communication-4', 'communication', 'Pour expliquer une idee'),
+  ('communication-5', 'communication', 'Vous aimez les discussions'),
+  ('communication-6', 'communication', 'Quand vous racontez une histoire'),
+  ('communication-7', 'communication', 'Votre ton naturel est'),
+  ('communication-8', 'communication', 'Vous preferez communiquer'),
+  ('communication-9', 'communication', 'Dans un groupe vous parlez'),
+  ('communication-10', 'communication', 'Vous ecoutez surtout'),
+  ('travail-1', 'travail-etudes', 'Votre style de travail est'),
+  ('travail-2', 'travail-etudes', 'Vous preferez un objectif'),
+  ('travail-3', 'travail-etudes', 'Quand vous etudiez, vous'),
+  ('travail-4', 'travail-etudes', 'Votre zone de competence preferee'),
+  ('travail-5', 'travail-etudes', 'Votre rythme de travail est'),
+  ('travail-6', 'travail-etudes', 'Vous aimez les projets'),
+  ('travail-7', 'travail-etudes', 'Dans un groupe vous prenez'),
+  ('travail-8', 'travail-etudes', 'Votre methode pour apprendre'),
+  ('travail-9', 'travail-etudes', 'Le feedback ideal est'),
+  ('travail-10', 'travail-etudes', 'Vous preferez travailler'),
+  ('projection-1', 'projection', 'Votre objectif principal actuel'),
+  ('projection-2', 'projection', 'Dans un an vous voulez'),
+  ('projection-3', 'projection', 'Vous aimeriez apprendre'),
+  ('projection-4', 'projection', 'Votre motivation vient surtout'),
+  ('projection-5', 'projection', 'Votre vision du succes est'),
+  ('projection-6', 'projection', 'Le projet ideal pour vous'),
+  ('projection-7', 'projection', 'Votre prochaine envie forte'),
+  ('projection-8', 'projection', 'Vous vous projetez plutot'),
+  ('projection-9', 'projection', 'Votre plus grande curiosite'),
+  ('projection-10', 'projection', 'Votre energie pour apprendre est'),
+  ('duo-1', 'duo', 'Le binome ideal est'),
+  ('duo-2', 'duo', 'Dans un duo, vous apportez'),
+  ('duo-3', 'duo', 'Vous preferez un partenaire'),
+  ('duo-4', 'duo', 'Quand un duo bloque, vous'),
+  ('duo-5', 'duo', 'Votre niveau d engagement est'),
+  ('duo-6', 'duo', 'Votre rythme prefere en duo'),
+  ('duo-7', 'duo', 'Vous aimez les duos'),
+  ('duo-8', 'duo', 'Un duo solide repose sur'),
+  ('duo-9', 'duo', 'Vous acceptez mieux'),
+  ('duo-10', 'duo', 'Le meilleur duo est')
+ON CONFLICT (question_id) DO NOTHING;

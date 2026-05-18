@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: rd-reponses-backend
+    env: node
+    region: frankfurt
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: rd-reponses-db
+          property: connectionString
+      - key: DATABASE_SSL
+        value: true
+      - key: PORT
+        value: 10000
+
+databases:
+  - name: rd-reponses-db
+    databaseName: rdreponses
+    user: rdreponses
+    plan: free
