@@ -1,7 +1,7 @@
 import cors from "cors";
 import crypto from "crypto";
 import express from "express";
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { pool } from "./db";
 import {
   generateToken,
@@ -17,6 +17,8 @@ import { forceHTTPS, securityHeaders, getCORSOptions } from "./security";
 const app = express();
 const port = Number(process.env.PORT || 3001);
 
+app.set("trust proxy", 1);
+
 // Security middleware (first)
 app.use(forceHTTPS);
 app.use(securityHeaders);
@@ -31,7 +33,9 @@ app.use(
     legacyHeaders: false,
     keyGenerator: (req: AuthRequest) => {
       // Use user_id for authenticated users, IP for others
-      return req.user?.user_id || req.ip || "unknown";
+      return req.user?.user_id
+        ? `user:${req.user.user_id}`
+        : ipKeyGenerator(req.ip || "0.0.0.0");
     }
   })
 );
