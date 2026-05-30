@@ -594,7 +594,12 @@ app.get(
     }
 
     const { rows } = await pool.query(
-      "SELECT reponse_id, user_id, session_id, question_id, section_id, question_text, reponse, selected_option, free_text, skipped, timestamp FROM answers WHERE session_id = $1 ORDER BY timestamp ASC LIMIT $2 OFFSET $3",
+      `SELECT a.reponse_id, a.user_id, a.session_id, a.question_id, q.section_id, q.question_text, a.selected_option, a.free_text, a.skipped, a.timestamp
+       FROM answers a
+       JOIN questions q ON a.question_id = q.question_id
+       WHERE a.session_id = $1
+       ORDER BY a.timestamp ASC
+       LIMIT $2 OFFSET $3`,
       [sessionId, limit, offset]
     );
 
@@ -603,8 +608,13 @@ app.get(
       [sessionId]
     );
 
+    const results = rows.map(row => ({
+      ...row,
+      reponse: row.skipped ? "" : [row.selected_option, row.free_text].filter(Boolean).join(" | ")
+    }));
+
     res.json({
-      answers: rows,
+      answers: results,
       total: toNumber(countResult.rows[0].count),
       limit,
       offset
@@ -667,7 +677,7 @@ app.get(
     const offset = Math.max(toNumber(req.query.offset) || 0, 0);
 
     const questionsQuery = `
-      SELECT DISTINCT a.question_id, COALESCE(a.question_text, q.question_text) AS question_text
+      SELECT DISTINCT a.question_id, q.question_text
       FROM answers a
       LEFT JOIN questions q ON q.question_id = a.question_id
       WHERE a.user_id = $1
