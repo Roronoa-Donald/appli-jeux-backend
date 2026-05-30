@@ -451,7 +451,7 @@ app.post(
 
           results.successful_ids.push(reponse_id);
         } catch {
-          results.failed++;
+          results.failed_count++;
         }
       }
 
