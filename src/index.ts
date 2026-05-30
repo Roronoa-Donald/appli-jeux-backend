@@ -111,9 +111,9 @@ app.post(
 
     const normalizedName = display_name.trim();
 
-    // Search for exactly one user with this name to avoid collisions
+    // Search for exactly one user with this name to avoid collisions (case-insensitive)
     const { rows } = await pool.query(
-      "SELECT user_id FROM users WHERE display_name = $1",
+      "SELECT user_id FROM users WHERE display_name ILIKE $1",
       [normalizedName]
     );
 
