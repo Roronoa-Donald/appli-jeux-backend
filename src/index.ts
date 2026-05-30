@@ -663,12 +663,28 @@ app.get(
   requireAuth as any,
   asyncHandler(async (req: AuthRequest, res) => {
     const userId = req.params.id;
-    const { rows } = await pool.query(
-      "SELECT DISTINCT a.question_id, COALESCE(a.question_text, q.question_text) AS question_text FROM answers a LEFT JOIN questions q ON q.question_id = a.question_id WHERE a.user_id = $1 ORDER BY a.question_id",
-      [userId]
-    );
+    const limit = Math.min(toNumber(req.query.limit) || 20, 100);
+    const offset = Math.max(toNumber(req.query.offset) || 0, 0);
 
-    res.json(rows);
+    const questionsQuery = `
+      SELECT DISTINCT a.question_id, COALESCE(a.question_text, q.question_text) AS question_text
+      FROM answers a
+      LEFT JOIN questions q ON q.question_id = a.question_id
+      WHERE a.user_id = $1
+      ORDER BY a.timestamp ASC
+      LIMIT $2 OFFSET $3
+    `;
+    const countQuery = "SELECT COUNT(DISTINCT question_id) FROM answers WHERE user_id = $1";
+
+    const [questionsResult, countResult] = await Promise.all([
+      pool.query(questionsQuery, [userId, limit, offset]),
+      pool.query(countQuery, [userId])
+    ]);
+
+    res.json({
+      questions: questionsResult.rows,
+      total: toNumber(countResult.rows[0].count)
+    });
   })
 );
 
