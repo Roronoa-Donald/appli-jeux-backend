@@ -13,10 +13,7 @@ const isProduction = process.env.NODE_ENV === "production";
 
 export const pool = new Pool({
   connectionString: databaseUrl,
-  ssl: sslEnabled ? (isProduction ? {
-    rejectUnauthorized: true
-  } : {
-    rejectUnauthorized: false,
-    checkServerIdentity: () => undefined
-  }) : false
+  ssl: sslEnabled ? {
+    rejectUnauthorized: false
+  } : false
 });
