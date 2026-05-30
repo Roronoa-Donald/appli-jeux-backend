@@ -1,0 +1,13 @@
+
+> rd-reponses-backend@1.0.0 migrate
+> cross-env NODE_TLS_REJECT_UNAUTHORIZED=0 node apply-migration.js
+
+Connected to database. Checking migrations...
+Migration 001_init.sql already applied. Skipping.
+Migration 002_sync_questions.sql already applied. Skipping.
+Migration 003_unique_answers.sql already applied. Skipping.
+Migration 004_add_auth.sql already applied. Skipping.
+Migration 005_update_questions.sql already applied. Skipping.
+Migration 006_normalize_answers.sql already applied. Skipping.
+All migrations processed successfully.
+Terminer le programme de commandes (O/N)ÿ? 

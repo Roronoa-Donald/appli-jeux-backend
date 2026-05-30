@@ -99,9 +99,45 @@ type AdminUserRow = {
   last_session_id: string | null;
 };
 
-app.get("/health", (_req, res) => {
-  res.json({ ok: true });
-});
+app.post(
+  "/auth/identify",
+  asyncHandler(async (req, res) => {
+    const { display_name } = req.body || {};
+
+    if (!isNonEmptyString(display_name)) {
+      res.status(400).json({ error: "missing_display_name" });
+      return;
+    }
+
+    const normalizedName = display_name.trim();
+
+    // Search for exactly one user with this name to avoid collisions
+    const { rows } = await pool.query(
+      "SELECT user_id FROM users WHERE display_name = $1",
+      [normalizedName]
+    );
+
+    let userId: string;
+    if (rows.length === 1) {
+      userId = rows[0].user_id;
+    } else {
+      // Create a new user if no user or multiple users have this name
+      userId = `user-${crypto.randomUUID()}`;
+      await pool.query(
+        "INSERT INTO users (user_id, display_name) VALUES ($1, $2)",
+        [userId, normalizedName]
+      );
+    }
+
+    const token = generateToken(userId, normalizedName);
+
+    res.json({
+      user_id: userId,
+      display_name: normalizedName,
+      token
+    });
+  })
+);
 
 // Auth endpoints
 app.post(
@@ -197,12 +233,13 @@ app.post(
 
 app.post(
   "/sessions",
-  optionalAuth as any,
+  requireAuth as any,
   asyncHandler(async (req: AuthRequest, res) => {
-    const { user_id, person_name, session_id, started_at, total_active_ms } =
+    const { person_name, session_id, started_at, total_active_ms } =
       req.body || {};
+    const userId = req.user!.user_id;
+
     if (
-      !isNonEmptyString(user_id) ||
       !isNonEmptyString(person_name) ||
       !isNonEmptyString(session_id) ||
       !isNonEmptyString(started_at)
@@ -221,7 +258,6 @@ app.post(
       return;
     }
 
-    const normalizedUserId = user_id.trim();
     const normalizedPersonName = person_name.trim();
     const normalizedSessionId = session_id.trim();
     const initialActiveMs = totalActiveMs ?? 0;
@@ -231,13 +267,13 @@ app.post(
       await client.query("BEGIN");
       await client.query(
         "INSERT INTO users (user_id, display_name) VALUES ($1, $2) ON CONFLICT (user_id) DO UPDATE SET display_name = EXCLUDED.display_name",
-        [normalizedUserId, normalizedPersonName]
+        [userId, normalizedPersonName]
       );
       await client.query(
         "INSERT INTO sessions (session_id, user_id, started_at, total_active_ms) VALUES ($1, $2, $3, $4) ON CONFLICT (session_id) DO UPDATE SET user_id = EXCLUDED.user_id, started_at = EXCLUDED.started_at, total_active_ms = GREATEST(sessions.total_active_ms, EXCLUDED.total_active_ms)",
         [
           normalizedSessionId,
-          normalizedUserId,
+          userId,
           normalizedStartedAt,
           initialActiveMs
         ]
@@ -327,9 +363,10 @@ app.get(
 // Batch answers endpoint
 app.post(
   "/answers/batch",
-  optionalAuth as any,
+  requireAuth as any,
   asyncHandler(async (req: AuthRequest, res) => {
     const { answers } = req.body || {};
+    const userId = req.user!.user_id;
 
     if (!Array.isArray(answers) || answers.length === 0) {
       res.status(400).json({ error: "missing_answers" });
@@ -341,9 +378,9 @@ app.post(
       return;
     }
 
-    const results: { success: number; failed: number } = {
-      success: 0,
-      failed: 0
+    const results: { successful_ids: string[]; failed_count: number } = {
+      successful_ids: [],
+      failed_count: 0
     };
 
     const client = await pool.connect();
@@ -355,11 +392,8 @@ app.post(
         try {
           const {
             reponse_id,
-            user_id,
             session_id,
             question_id,
-            section_id,
-            question_text,
             selected_option,
             free_text,
             reponse,
@@ -368,35 +402,36 @@ app.post(
             total_active_ms
           } = answer;
 
-          // Validation (basic)
-          if (!reponse_id || !user_id || !session_id || !question_id) {
-            results.failed++;
+          if (!reponse_id || !session_id || !question_id) {
+            results.failed_count++;
+            continue;
+          }
+
+          // Validate session ownership
+          const sessionCheck = await client.query(
+            "SELECT 1 FROM sessions WHERE session_id = $1 AND user_id = $2",
+            [session_id, userId]
+          );
+          if (sessionCheck.rows.length === 0) {
+            results.failed_count++;
             continue;
           }
 
           const freeTextValue = typeof free_text === "string" ? free_text : "";
           if (freeTextValue.length > 200) {
-            results.failed++;
+            results.failed_count++;
             continue;
           }
 
-          // Insert question
+          // Get question details for verification if needed, but we rely on the questions table
+          // Insert answer (Normalized: no section_id, question_text, or reponse)
           await client.query(
-            "INSERT INTO questions (question_id, section_id, question_text) VALUES ($1, $2, $3) ON CONFLICT (question_id) DO UPDATE SET section_id = EXCLUDED.section_id, question_text = EXCLUDED.question_text",
-            [question_id, section_id, question_text]
-          );
-
-          // Insert answer
-          await client.query(
-            "INSERT INTO answers (reponse_id, user_id, session_id, question_id, section_id, question_text, reponse, selected_option, free_text, skipped, timestamp) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) ON CONFLICT (reponse_id) DO NOTHING",
+            "INSERT INTO answers (reponse_id, user_id, session_id, question_id, selected_option, free_text, skipped, timestamp) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (reponse_id) DO NOTHING",
             [
               reponse_id,
-              user_id,
+              userId,
               session_id,
               question_id,
-              section_id,
-              question_text,
-              reponse || "",
               selected_option || null,
               freeTextValue,
               Boolean(skipped),
@@ -404,7 +439,6 @@ app.post(
             ]
           );
 
-          // Update session active time
           if (total_active_ms !== undefined && total_active_ms !== null) {
             const totalActiveMs = parseNonNegativeNumber(total_active_ms);
             if (totalActiveMs !== null) {
@@ -415,7 +449,7 @@ app.post(
             }
           }
 
-          results.success++;
+          results.successful_ids.push(reponse_id);
         } catch {
           results.failed++;
         }
@@ -435,30 +469,24 @@ app.post(
 
 app.post(
   "/answers",
-  optionalAuth as any,
+  requireAuth as any,
   asyncHandler(async (req: AuthRequest, res) => {
     const {
       reponse_id,
-      user_id,
       session_id,
       question_id,
-      section_id,
-      question_text,
       selected_option,
       free_text,
-      reponse,
       timestamp,
       skipped,
       total_active_ms
     } = req.body || {};
+    const userId = req.user!.user_id;
 
     if (
       !isNonEmptyString(reponse_id) ||
-      !isNonEmptyString(user_id) ||
       !isNonEmptyString(session_id) ||
       !isNonEmptyString(question_id) ||
-      !isNonEmptyString(section_id) ||
-      !isNonEmptyString(question_text) ||
       !isNonEmptyString(timestamp)
     ) {
       res.status(400).json({ error: "missing_fields" });
@@ -483,22 +511,14 @@ app.post(
       res.status(400).json({ error: "invalid_fields" });
       return;
     }
-    if (reponse !== undefined && reponse !== null && typeof reponse !== "string") {
-      res.status(400).json({ error: "invalid_fields" });
-      return;
-    }
     if (skipped !== undefined && typeof skipped !== "boolean") {
       res.status(400).json({ error: "invalid_fields" });
       return;
     }
 
     const normalizedReponseId = reponse_id.trim();
-    const normalizedUserId = user_id.trim();
     const normalizedSessionId = session_id.trim();
     const normalizedQuestionId = question_id.trim();
-    const normalizedSectionId = section_id.trim();
-    const normalizedQuestionText = question_text.trim();
-    const responseText = typeof reponse === "string" ? reponse : "";
     const freeTextValue = typeof free_text === "string" ? free_text : "";
     const selectedOptionValue =
       typeof selected_option === "string" ? selected_option : null;
@@ -517,20 +537,25 @@ app.post(
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
-      await client.query(
-        "INSERT INTO questions (question_id, section_id, question_text) VALUES ($1, $2, $3) ON CONFLICT (question_id) DO UPDATE SET section_id = EXCLUDED.section_id, question_text = EXCLUDED.question_text",
-        [normalizedQuestionId, normalizedSectionId, normalizedQuestionText]
+
+      // Validate session ownership
+      const sessionCheck = await client.query(
+        "SELECT 1 FROM sessions WHERE session_id = $1 AND user_id = $2",
+        [normalizedSessionId, userId]
       );
+      if (sessionCheck.rows.length === 0) {
+        res.status(403).json({ error: "session_not_owned" });
+        await client.query("ROLLBACK");
+        return;
+      }
+
       await client.query(
-        "INSERT INTO answers (reponse_id, user_id, session_id, question_id, section_id, question_text, reponse, selected_option, free_text, skipped, timestamp) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) ON CONFLICT (reponse_id) DO NOTHING",
+        "INSERT INTO answers (reponse_id, user_id, session_id, question_id, selected_option, free_text, skipped, timestamp) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (reponse_id) DO NOTHING",
         [
           normalizedReponseId,
-          normalizedUserId,
+          userId,
           normalizedSessionId,
           normalizedQuestionId,
-          normalizedSectionId,
-          normalizedQuestionText,
-          responseText,
           selectedOptionValue,
           freeTextValue,
           skippedValue,
