@@ -24,6 +24,16 @@ app.use(forceHTTPS);
 app.use(securityHeaders);
 app.use(cors(getCORSOptions()));
 app.use(express.json({ limit: "1mb" }));
+
+// Request logging middleware
+app.use((req, res, next) => {
+  const timestamp = new Date().toISOString();
+  const { method, url } = req;
+  const body = Object.keys(req.body).length > 0 ? JSON.stringify(req.body) : "empty";
+  console.log(`[${timestamp}] ${method} ${url} | Body: ${body}`);
+  next();
+});
+
 // Global rate limit (by IP for unauthenticated)
 app.use(
   rateLimit({
@@ -241,6 +251,30 @@ app.post(
     }
 
     res.json({ session_id: normalizedSessionId });
+  })
+);
+
+app.get(
+  "/users/:id/last-session",
+  optionalAuth as any,
+  asyncHandler(async (req: AuthRequest, res) => {
+    const userId = req.params.id;
+    if (!isNonEmptyString(userId)) {
+      res.status(400).json({ error: "missing_user_id" });
+      return;
+    }
+
+    const { rows } = await pool.query(
+      "SELECT s.* FROM sessions s WHERE s.user_id = $1 ORDER BY s.started_at DESC LIMIT 1",
+      [userId]
+    );
+
+    if (rows.length === 0) {
+      res.status(404).json({ error: "no_session_found" });
+      return;
+    }
+
+    res.json(rows[0]);
   })
 );
 
