@@ -12,7 +12,7 @@ const sslEnabled = process.env.DATABASE_SSL !== "false";
 const isProduction = process.env.NODE_ENV === "production";
 
 export const pool = new Pool({
-  connectionString: databaseUrl,
+  connectionString: databaseUrl.replace(/sslmode=[^&]*/g, ""),
   ssl: sslEnabled ? {
     rejectUnauthorized: false
   } : false
